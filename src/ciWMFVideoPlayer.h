@@ -45,6 +45,8 @@ class ciWMFVideoPlayer {
 
 		bool _waitForLoadedToPlay;
 		bool _isLooping;
+		bool _waitToSetVolume;
+		float _currentVolume;
 
 		bool _sharedTextureCreated;
 		
@@ -62,6 +64,7 @@ class ciWMFVideoPlayer {
 	 ~ciWMFVideoPlayer();
 
 	 bool				loadMovie(std::string name, std::string audioDevice="");
+	 bool				loadMovie(ci::fs::path path, std::string audioDevice="");
 	 void				close();
 	 void				update();
 	
@@ -74,6 +77,9 @@ class ciWMFVideoPlayer {
 
 	 void				setPosition(float pos);
 
+	 void				setVolume(float vol);
+	 float 				getVolume();
+
 	 float				getHeight();
 	 float				getWidth();
 
@@ -85,7 +91,9 @@ class ciWMFVideoPlayer {
 	 bool				isLooping() { return _isLooping; }
 
 	void draw(int x, int y , int w, int h);
-	void draw(int x, int y) { draw(x,y,getWidth(),getHeight()); }
+	void draw(int x, int y) { draw(x, y, static_cast<int>(getWidth()), static_cast<int>(getHeight())); }
+	void draw(ci::Rectf rect);
+	void draw(ci::Area area, ci::Rectf rect);
 
 	HWND getHandle() { return _hwndPlayer;}
 	LRESULT WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);

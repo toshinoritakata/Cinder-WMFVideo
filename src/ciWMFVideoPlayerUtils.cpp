@@ -115,6 +115,7 @@ CPlayer::CPlayer(HWND hVideo, HWND hEvent) :
     m_nRefCount(1),
 	m_pEVRPresenter(NULL),
 	m_pSequencerSource(NULL),
+	m_pVolumeControl(NULL),
 	_previousTopoID(0),
 	_isLooping(false)
 {
@@ -276,6 +277,7 @@ HRESULT CPlayer::OpenMultipleURL(vector<const WCHAR *> &urls)
 	}
 
 	m_state = OpenPending;
+	_currentVolume = 1.0f;
 
 	// If SetTopology succeeds, the media session will queue an 
 	// MESessionTopologySet event.
@@ -343,6 +345,7 @@ HRESULT CPlayer::OpenURL(const WCHAR *sURL, const WCHAR *audioDeviceId)
     }
 
     m_state = OpenPending;
+	_currentVolume = 1.0f;
 
     // If SetTopology succeeds, the media session will queue an 
     // MESessionTopologySet event.
@@ -415,7 +418,7 @@ HRESULT CPlayer::setPosition(float pos)
 	PROPVARIANT varStart;
 	PropVariantInit(&varStart);
 	varStart.vt = VT_I8;
-	varStart.hVal.QuadPart = pos* 10000000.0; //i.e. seeking to pos // should be MFTIME and not float :(
+	varStart.hVal.QuadPart = static_cast<LONGLONG>(pos* 10000000.0); //i.e. seeking to pos // should be MFTIME and not float :(
 
 	HRESULT hr = m_pSession->Start(&GUID_NULL,&varStart);
 
@@ -435,6 +438,35 @@ HRESULT CPlayer::setPosition(float pos)
 	PropVariantClear(&varStart);
 	return S_OK;
 }
+
+HRESULT CPlayer::setVolume(float vol)
+{
+	//Should we lock hereas well ?
+	if (m_pSession == NULL) 
+	{
+		return E_FAIL;
+	}
+
+	if (m_pVolumeControl == NULL) 
+	{
+		HRESULT hr = MFGetService(m_pSession, MR_STREAM_VOLUME_SERVICE, __uuidof(IMFAudioStreamVolume), (void**)&m_pVolumeControl);
+		_currentVolume = vol;
+		if (FAILED(hr)) {
+			return E_FAIL;
+		}
+	}
+
+	UINT32 nChannels;
+	m_pVolumeControl->GetChannelCount(&nChannels);
+	for (int i = 0; i < nChannels; i++) {
+		m_pVolumeControl->SetChannelVolume(i, vol);
+	}
+
+	_currentVolume = vol;
+
+	return S_OK;
+}
+
 
 //  Callback for the asynchronous BeginGetEvent method.
 HRESULT CPlayer::Invoke(IMFAsyncResult *pResult)
@@ -623,13 +655,12 @@ HRESULT CPlayer::OnPresentationEnded(IMFMediaEvent *pEvent)
 	varStart.vt = VT_I8;
 	varStart.hVal.QuadPart = 0; //i.e. seeking to the beginning
 		
-	//HRESULT hr = S_OK;
-	//hr = m_pSession->Start(&GUID_NULL,&varStart);
+	HRESULT hr = S_OK;
+	hr = m_pSession->Start(&GUID_NULL,&varStart);
 
-	//if FAILED(hr)
-	{
-		//ofLogError("ofxWMFVideoPlayerUtils", "Error while looping");
-	}
+	//if FAILED(hr) {
+	//	ofLogError("ofxWMFVideoPlayerUtils", "Error while looping");
+	//}
 	if (!_isLooping) m_pSession->Pause();
 	else m_state = Started;
 		
@@ -724,6 +755,7 @@ HRESULT CPlayer::CloseSession()
     HRESULT hr = S_OK;
 
     if (m_pVideoDisplay != NULL ) SafeRelease(&m_pVideoDisplay);
+	if (m_pVolumeControl != NULL) SafeRelease(&m_pVolumeControl);
 
     // First close the media session.
     if (m_pSession)
@@ -1342,7 +1374,7 @@ float CPlayer::getDuration() {
 		UINT64 longDuration = 0;
 		hr = pDescriptor->GetUINT64(MF_PD_DURATION, &longDuration);
 		if (SUCCEEDED(hr))
-			duration = (float)longDuration / 10000000.0;
+			duration = (float)longDuration / 10000000.0f;
 	}
 	SafeRelease(&pDescriptor);
 	return duration;
@@ -1359,7 +1391,7 @@ float CPlayer::getPosition() {
 		MFTIME longPosition = 0;
 		hr = pClock->GetTime(&longPosition);
 		if (SUCCEEDED(hr))
-			position = (float)longPosition / 10000000.0;
+			position = (float)longPosition / 10000000.0f;
 	}
 	SafeRelease(&pClock);
 	return position;

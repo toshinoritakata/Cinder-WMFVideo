@@ -41,6 +41,9 @@ ciWMFVideoPlayer::ciWMFVideoPlayer() : _player(NULL)
 	
 	_waitForLoadedToPlay = false;
 	_sharedTextureCreated = false;	
+
+	_waitToSetVolume = false;
+	_currentVolume = 1.0f;
 }
 	 
 ciWMFVideoPlayer::~ciWMFVideoPlayer() {
@@ -69,20 +72,25 @@ void ciWMFVideoPlayer::forceExit()
 	}
 }
 
- bool ciWMFVideoPlayer::loadMovie(string name, string audioDevice) 
- {
-	 if (!_player) 
+bool ciWMFVideoPlayer::loadMovie(string name, string audioDevice)  
+{
+	return loadMovie(getAssetPath(name), audioDevice);
+}
+
+bool ciWMFVideoPlayer::loadMovie(ci::fs::path path, string audioDevice)
+{
+	 if (!_player)
 	 { 
 		//ofLogError("ciWMFVideoPlayer") << "Player not created. Can't open the movie.";
 		 return false;
 	}
 
-	fs::path path = getAssetPath(name);
+	//fs::path path = getAssetPath(name);
 	DWORD fileAttr = GetFileAttributesW(path.c_str());
 	if (fileAttr == INVALID_FILE_ATTRIBUTES) 
 	{
 		stringstream s;
-		s << "The video file '" << name << "'is missing.";
+		s << "The video file '" << path << "'is missing.";
 		//ofLog(OF_LOG_ERROR,"ciWMFVideoPlayer:" + s.str());
 		return false;
 	}
@@ -129,8 +137,22 @@ void ciWMFVideoPlayer::forceExit()
 	}
 
 	_waitForLoadedToPlay = false;
-	return false;
- }
+	return true;
+}
+
+void ciWMFVideoPlayer::draw(ci::Area area, ci::Rectf rect) 
+{
+	_player->m_pEVRPresenter->lockSharedTexture();	
+	gl::draw(_tex, area, rect);
+	_player->m_pEVRPresenter->unlockSharedTexture();
+} 
+
+void ciWMFVideoPlayer::draw(ci::Rectf rect)
+{
+	_player->m_pEVRPresenter->lockSharedTexture();	
+	gl::draw(_tex, rect);
+	_player->m_pEVRPresenter->unlockSharedTexture();
+}
 
  void ciWMFVideoPlayer::draw(int x, int y, int w, int h) 
  {
@@ -156,6 +178,8 @@ bool  ciWMFVideoPlayer:: isPaused()
 
  void	ciWMFVideoPlayer::	close() {
 	 _player->Shutdown();
+	 _currentVolume = 1.0f;
+	 _waitToSetVolume = false;
 
 }
 void	ciWMFVideoPlayer::	update() {
@@ -165,6 +189,10 @@ void	ciWMFVideoPlayer::	update() {
 		_waitForLoadedToPlay=false;
 		_player->Play();
 		
+	}
+
+	if (_waitToSetVolume) {
+		_player->setVolume(_currentVolume);
 	}
 	return;
  }
@@ -198,6 +226,24 @@ void ciWMFVideoPlayer::setPosition(float pos)
 {
 	_player->setPosition(pos);
 }
+
+void ciWMFVideoPlayer::setVolume(float vol)
+{
+	if ((_player) && (_player->GetState() != OpenPending) && (_player->GetState() != Closing) && (_player->GetState() != Closed)) {
+		_player->setVolume(vol);
+		_waitToSetVolume = false;
+	}
+	else {
+		_waitToSetVolume = true;
+	}	
+	_currentVolume = vol;
+}
+
+float ciWMFVideoPlayer::getVolume()
+{
+	return _player->getVolume();
+}
+
 
 float ciWMFVideoPlayer::getHeight() { return _player->getHeight(); }
 float ciWMFVideoPlayer::getWidth() { return _player->getWidth(); }
